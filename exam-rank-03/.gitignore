@@ -1,0 +1,15 @@
+CMakeLists.txt
+/cmake-build-debug
+/.idea
+
+# Object files
+*.o
+
+# Libraries
+*.a
+
+# Executables
+*.exe
+
+.DS_Store
+.vscode
