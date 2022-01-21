@@ -48,7 +48,7 @@ int		parser(FILE *file)
 	draw = malloc(width * height);
 	if (draw == NULL)
 		return (1);
-	while (i < width * height)
+	while (i < width * height)//замена memset
 		draw[i++] = back;
 	while ((result = fscanf(file, "%c %f %f %f %c\n", &type, &x, &y, &rad, &color)) == 5) 
 	{
@@ -61,13 +61,13 @@ int		parser(FILE *file)
 	return (0);
 }
 
-void	output(void) 
+void	output(void) //вывод холста (draw), то что получилось в итоге
 {
 	int	i = -1, c = 10;
 
 	while (++i < height)
 	{
-		write(1, draw + i * width, width);
+		write(1, draw + i * width, width);//строками
 		write(1, &c, 1);
 	}
 }
