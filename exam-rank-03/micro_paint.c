@@ -58,7 +58,7 @@ int		parser(FILE *file)
 
 void	output(void) //вывод холста (draw), то что получилось в итоге
 {
-	int	i = -1, c = 10;
+	int	i = -1, c = 10; // 10 = '\n'
 
 	while (++i < height)
 	{
