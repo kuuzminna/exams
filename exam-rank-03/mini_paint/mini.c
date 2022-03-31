@@ -10,13 +10,13 @@ float   x, y, rad;
 
 int check_hit(float i, float j)
 {
-    float distance = sqrtf((i - x)* (i - x) + (j - y)* (j - y)); //запомнить
+    float distance = sqrtf((i - x)* (i - x) + (j - y)* (j - y));
 
-    if (distance <= rad) //запомнить
+    if (distance <= rad)
     {
-        if (distance - rad <= -1) //запомнить
-            return(1);//запомнить
-        return (2);//запомнить
+        if (distance - rad <= -1)
+            return(1);
+        return (2);
     }
     return(0);
 }
@@ -31,7 +31,7 @@ void drawing(void)
         while (++j < height)
         {
             hit = check_hit((float)i, (float)j);
-            if (hit == 2 || (hit == 1 && type == "C"))
+            if (hit == 2 || (hit == 1 && type == 'C'))
                 draw[i + j * height] = color;
         }
     }
@@ -41,16 +41,16 @@ int parser(FILE *file)
 {
     int i = 0, result; //инициализацию запомнить
 
-    if (scanf(file, "%d %d %c\n", &width, &height, &back) != 3)
+    if (fscanf(file, "%d %d %c\n", &width, &height, &back) != 3)
         return (1);
-    if (width <= 0 || width > 300 || height <= 0 || height > 300) ////ОБРАТИ ВНИМАНИЕ
+    if (width < 1 || width > 300 || height < 1 || height > 300) ////ОБРАТИ ВНИМАНИЕ
         return(1);
     draw = malloc(height * width);
     if (draw == NULL)
         return(1);
     while (i < width * height)
         draw[i++] = back;
-    while ((result = scanf(file, "%c %f %f %f %c", &type, &x, &y, &rad, &color)) == 5)
+    while ((result = fscanf(file, "%c %f %f %f %c", &type, &x, &y, &rad, &color)) == 5)
     {
         if(rad <= 0 || (type != 'c' && type != 'C'))
             return(1);
