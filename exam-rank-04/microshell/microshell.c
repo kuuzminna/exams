@@ -1,295 +1,156 @@
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
+#include "microshell.h"
 
-#define SIDE_OUT	0
-#define SIDE_IN		1
-// для файловых дескрипторов
-#define STDIN		0
-#define STDOUT		1
-#define STDERR		2
-// для поля type
-#define TYPE_END	0
-#define TYPE_PIPE	1
-#define TYPE_BREAK	2
-
-// #ifdef TEST_SH
-// # define TEST		1
-// #else
-// # define TEST		0
-// #endif
-
-typedef struct	s_list
+int ft_strlen(char *str)
 {
-	char			**args; // команда и параметры
-	int				length; // длина массива args
-	int				type; // наличие '|' or ';' в иином случае TYPE_END
-	int				pipes[2]; // для создания канала
-	struct s_list	*previous; // link to the previous node
-	struct s_list	*next; // link to the next node
-}				t_list;
-
-/*
-**====================================
-**============Part utils==============
-**====================================
-*/
-
-int ft_strlen(char const *str) // высчитывает длину строки
-{
-	int	i;
-
-	i = 0;
-	while (str[i])
-		i++;
-	return (i);
+    int i = 0;
+    while (str[i])
+        i++;
+    return (i);
 }
 
-/*
-**====================================
-**============Part error==============
-**====================================
-*/
-
-int show_error(char const *str) // вывод ошибки
+void ft_putstr_fd(char *str, int fd)
 {
-	if (str)
-		write(STDERR, str, ft_strlen(str));
-	return (EXIT_FAILURE);
+    write(fd, str, ft_strlen(str));
 }
 
-int exit_fatal(void) // ошибка выделения памяти, любая др ош
+void ft_exec_fatal(char *str)
 {
-	show_error("error: fatal\n");
-	exit(EXIT_FAILURE);
-	return (EXIT_FAILURE);
+    ft_putstr_fd("error: cannot execute ", 2);
+    ft_putstr_fd(str, 2);
+    ft_putstr_fd("\n", 2);
+    exit(1);
 }
 
-void *exit_fatal_ptr(void) // ошибка и вернуть НААЛЛ. использует в стердапе и все
+void ft_fatal(void)
 {
-	exit_fatal();
-	exit(EXIT_FAILURE);
-	return (NULL);
+    ft_putstr_fd("error: fatal\n", 2);
+    exit(1);
 }
 
-char *ft_strdup(char const *str) // Функция strdup() путем обращения к функции malloc() выделяет память,
-//  достаточную для хранения дубликата строки, на которую указывает str, а затем производит копирование этой строки
-//  в выделенную область и возвращает указатель на нее.
+void	ft_openpipes(int fd[2])
 {
-	char	*copy;
-	int		i;
-
-	if (!(copy = (char*)malloc(sizeof(*copy) * (ft_strlen(str) + 1))))
-		return (exit_fatal_ptr());
-	i = 0;
-	while (str[i])
+	if (has_pipe == 1)
 	{
-		copy[i] = str[i];
-		i++;
+		if (close(fd[READ]) == -1)
+			ft_fatal();
+		if (dup2(fd[WRITE], STDOUT_FILENO) == -1)
+			ft_fatal();
+		if (close(fd[WRITE]) == -1)
+			ft_fatal();
 	}
-	copy[i] = 0;
-	return (copy);
 }
 
-/*
-**====================================
-**============Part parsing============
-**====================================
-*/
-
-int add_arg(t_list *cmd, char *arg)  // указатель на узел и аргумент
+void	ft_closepipes(int fd[2])
 {
-	char	**tmp;
-	int		i;
-
-	i = 0;
-	tmp = NULL;
-	if (!(tmp = (char**)malloc(sizeof(*tmp) * (cmd->length + 2))))
-		return (exit_fatal());
-	while (i < cmd->length)
+	if (has_pipe == 1)
 	{
-		tmp[i] = cmd->args[i];// записываем команду и ост арг
-		i++;
+		if (dup2(fd[READ], STDIN_FILENO) == -1)
+			ft_fatal();
+		if (close(fd[READ]) == -1)
+			ft_fatal();
+		if (close(fd[WRITE]) == -1)
+			ft_fatal();
 	}
-	if (cmd->length > 0) // очистка - если args[i] существует
-		free(cmd->args);
-	cmd->args = tmp;
-	cmd->args[i++] = ft_strdup(arg); // записываем команду или параметр
-	cmd->args[i] = 0;
-	cmd->length++; //если была команда, то длина = 1, появился аргумент то +1
-	return (EXIT_SUCCESS);
 }
 
-int list_push(t_list **list, char *arg) // добавление комнады в список двусвязный
+void ft_cd(char **argv)
 {
-	t_list	*new; // указатель на узел
+    int i = 0;
 
-	if (!(new = (t_list*)malloc(sizeof(*new)))) // выделение памяти
-		return (exit_fatal());
-	new->args = NULL;
-	new->length = 0;
-	new->type = TYPE_END;
-	new->previous = NULL;
-	new->next = NULL;
-	if (*list) // если узел существует
-	{
-		(*list)->next = new;
-		new->previous = *list; // ссылка на предыдущий и следующий узел
-	}
-	*list = new;
-	return (add_arg(new, arg));
+    while (argv[i] != NULL)
+        i++;
+    if (i != 2)
+    {
+        ft_putstr_fd("error: cd: bad arguments\n", 2);
+        ret = 1;
+        return ;
+    }
+    if (chdir(argv[1]) == -1)
+    {
+        ft_putstr_fd("error: cd: cannot change directory to ", 2);
+        ft_putstr_fd(argv[1], 2);
+        ret = 1;
+        return ;
+    }
 }
 
-int list_rewind(t_list **list) // перемотка к первому узлу списка
+void ft_execute(char **argv, char **envp)
 {
-	while (*list && (*list)->previous) // если существует этот узел и предыдущий
-		*list = (*list)->previous;		// то переходим к предыдущему
-	return (EXIT_SUCCESS);
+    pid_t pid;
+    int fd[2];
+
+    if (strcmp(argv[0], "cd") == 0)
+        return (ft_cd(argv));
+    if (has_pipe == 1)
+    {
+        if (pipe(fd) == -1)
+            ft_fatal();
+    }
+    pid = fork();
+    if (pid == 0)
+    {
+        ft_openpipes(fd);
+        if (execve(argv[0], argv, envp) == -1)
+            ft_exec_fatal(argv[0]);
+    }
+    else
+        ft_closepipes(fd);
 }
 
-int list_clear(t_list **cmds) // очистка списка
+void ft_command(char **cmd, char **envp)
 {
-	t_list	*tmp; // указатель на узел
-	int		i;
+    int i = -1;
+    int begin = 0;
+    int nproc = 0;
 
-	list_rewind(cmds);
-	while (*cmds) // пока узел существует
-	{
-		tmp = (*cmds)->next; // указателю tmp присваеваем адрес следующего узла
-		i = 0;
-		while (i < (*cmds)->length) // пока i меньше кол-ва команд и аргументов
-			free((*cmds)->args[i++]); // очистка каждого аргумента (каждого элемента массива args)
-		free((*cmds)->args); // очистка массива args
-		free(*cmds); // очистка самого узла
-		*cmds = tmp; // переопределение узла списка на следующий
-	}
-	*cmds = NULL; // зануление узла списка
-	return (EXIT_SUCCESS);
+    while (cmd[++i] != NULL)
+    {
+        if (strcmp(cmd[i], "|") == 0 || cmd[i + 1] == NULL)
+        {
+            has_pipe = 0;
+            if (strcmp(cmd[i] , "|") == 0)
+            {
+                has_pipe = 1;
+                cmd[i] = NULL;
+            }
+            ft_execute(cmd + begin, envp);
+            begin = i + 1;
+            nproc++;
+        }
+    }
+    while (nproc-- > 0)
+        waitpid(-1, 0, 0);
 }
 
-int parse_arg(t_list **cmds, char *arg)
+void	ft_restorefd(void)
 {
-	int	is_break;
+	int		tmp;
 
-	is_break = (strcmp(";", arg) == 0);							//1 - если ";", 0 - если иное
-	if (is_break && !*cmds)
-		return (EXIT_SUCCESS);
-	else if (!is_break && (!*cmds || (*cmds)->type > TYPE_END)) // если не ";" и нет cmds или тип комнады > 0(тип-пайп (1), тип-остановки(2))
-		return (list_push(cmds, arg));							// то добавим в лист
-	else if (strcmp("|", arg) == 0)								// если пайп
-		(*cmds)->type = TYPE_PIPE;								// то тип = тип-пайпа
-	else if (is_break) // если ";"
-		(*cmds)->type = TYPE_BREAK; 							// то тип = тип-остаговки
-	else 														// это аргумент
-		return (add_arg(*cmds, arg));
-	return (EXIT_SUCCESS);
+	tmp = dup(STDIN_FILENO);
+	if (dup2(to_stdin, STDIN_FILENO) == -1)
+		ft_fatal();
+	if (close(tmp) == -1)
+		ft_fatal();
 }
 
-/*
-**====================================
-**============Part execve=============
-**====================================
-*/
-
-int exec_cmd(t_list *cmd, char **env)
+int main(int argc, char **argv, char **envp)
 {
-	pid_t	pid;
-	int		ret;
-	int		status;
-	int		pipe_open;
+    int i = 0;
+    int begin = 1;
 
-	ret = EXIT_FAILURE;
-	pipe_open = 0;
-	if (cmd->type == TYPE_PIPE || (cmd->previous && cmd->previous->type == TYPE_PIPE)) // если тип узла пап или предущий тип ущла-пайп
-	{
-		pipe_open = 1;
-		if (pipe(cmd->pipes)) // При успешном выполнении возвращается 0. В случае ошибки возвращается -1
-			return (exit_fatal());
-	}
-	pid = fork(); // создание дочеренго процесса
-	// При успешном завершении родителю возвращается PID процесса-потомка, а процессу-потомку возвращается 0.
-	//  При ошибке родительскому процессу возвращается -1, процесс-потомок не создаётся
-	if (pid < 0)
-		return (exit_fatal());
-	else if (pid == 0)
-	{
-		if (cmd->type == TYPE_PIPE
-			&& dup2(cmd->pipes[SIDE_IN], STDOUT) < 0)
-			return (exit_fatal());
-		if (cmd->previous && cmd->previous->type == TYPE_PIPE
-			&& dup2(cmd->previous->pipes[SIDE_OUT], STDIN) < 0)
-			return (exit_fatal());
-		if ((ret = execve(cmd->args[0], cmd->args, env)) < 0)
-		{
-			show_error("error: cannot execute ");
-			show_error(cmd->args[0]);
-			show_error("\n");
-		}
-		exit(ret);
-	}
-	else
-	{
-		waitpid(pid, &status, 0);
-		if (pipe_open)
-		{
-			close(cmd->pipes[SIDE_IN]);
-			if (!cmd->next || cmd->type == TYPE_BREAK)
-				close(cmd->pipes[SIDE_OUT]);
-		}
-		if (cmd->previous && cmd->previous->type == TYPE_PIPE)
-			close(cmd->previous->pipes[SIDE_OUT]);
-		if (WIFEXITED(status))
-			ret = WEXITSTATUS(status);
-	}
-	return (ret);
-}
-
-int exec_cmds(t_list **cmds, char **env)
-{
-	t_list	*crt;
-	int		ret;
-
-	ret = EXIT_SUCCESS;
-	list_rewind(cmds);
-	while (*cmds)
-	{
-		crt = *cmds;
-		if (strcmp("cd", crt->args[0]) == 0)					// if args = cd
-		{
-			ret = EXIT_SUCCESS;
-			if (crt->length < 2) 								// если cd имеет неправильный номер аргумента
-				ret = show_error("error: cd: bad arguments\n");
-			else if (chdir(crt->args[1]))						// путь для перехода. если cd не удался
-			{
-				ret = show_error("error: cd: cannot change directory to ");
-				show_error(crt->args[1]);
-				show_error("\n");
-			}
-		}
-		else
-			ret = exec_cmd(crt, env);
-		if (!(*cmds)->next)										// если следующей комнады нет, то прекратить
-			break ;
-		*cmds = (*cmds)->next;
-	}
-	return (ret);
-}
-
-int main(int argc, char **argv, char **env)
-{
-	t_list	*cmds;
-	int		i;
-	int		ret;
-
-	ret = EXIT_SUCCESS;
-	cmds = NULL;
-	i = 1;
-	while (i < argc)
-		parse_arg(&cmds, argv[i++]);
-	if (cmds)
-		ret = exec_cmds(&cmds, env);
-	list_clear(&cmds);
-	// if (TEST)
-	// 	while (1);
-	return (ret);
+    to_stdin = dup(STDIN_FILENO);
+    (void)argc;
+    while(argv[++i] != NULL)
+    {
+        if (strcmp(argv[i], ";") == 0 || argv[i + 1] == NULL)
+        {
+            if (strcmp(argv[i], ";") == 0)
+                argv[i] = NULL;
+            ft_command(argv + begin, envp);
+            begin = i + 1;
+        }
+        ret = 0;
+        ft_restorefd();
+    }
+    return (ret);
 }
